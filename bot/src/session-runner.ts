@@ -4,6 +4,7 @@ import debounce from "lodash.debounce";
 import path from "path";
 import {
     addMessageReactions,
+    moveAllPlayers,
     movePlayersToSilenceChannel,
     movePlayersToTalkingChannel,
     mutePlayerInChannels,
@@ -13,6 +14,8 @@ import {
     updateMessageWithSessionOver,
 } from "./actions";
 import {
+    AMONG_US_LOBBY_ID,
+    CATEGORY_ID,
     EMOTE_IDS_TO_COLOR,
     GROUPING_TOGGLE_EMOJI,
     LEAVE_EMOJI,
@@ -125,13 +128,13 @@ class SessionRunner {
         // Check if they had a different color selected, and remove if that was the case.
         const oldMatching = this.session.links.getItems().find(x => x.snowflake === userId);
         if (oldMatching) {
-            await this.session.links.remove(oldMatching);
+            this.session.links.remove(oldMatching);
         }
 
         // if the old matching had the same client id, this is a re-react to remove the link.
         // if they don't match, add the link
         if (!oldMatching || oldMatching.clientId !== "" + relevantPlayer.clientId) {
-            await this.session.links.add(new PlayerLink("" + relevantPlayer.clientId, userId));
+            this.session.links.add(new PlayerLink("" + relevantPlayer.clientId, userId));
         }
 
         await orm.em.flush();
@@ -182,7 +185,7 @@ class SessionRunner {
             if (this.session.channels.getItems().some(x => x.type === SessionChannelType.IMPOSTORS)) return;
             const categoryChannel = this.session.channels.getItems().find(x => x.type === SessionChannelType.CATEGORY)!;
 
-            const impostorChannel = await this.bot.createChannel(this.session.guild, "Impostors", 2, {
+            const impostorChannel = await this.bot.createChannel(this.session.guild, "Impostors " + SHORT_REGION_NAMES[this.session.region] + " - " + this.session.lobbyCode, 2, {
                 parentID: categoryChannel.channelId,
                 permissionOverwrites: [
                     {
@@ -211,7 +214,10 @@ class SessionRunner {
 
         await this.session.channels.init();
         for (const channel of this.session.channels) {
-            await this.bot.deleteChannel(channel.channelId, "Among Us: Session is over.").catch(() => {});
+            if (channel.type != SessionChannelType.CATEGORY) {
+                await moveAllPlayers(this.bot, this.session, channel.channelId, AMONG_US_LOBBY_ID);
+                await this.bot.deleteChannel(channel.channelId, "Among Us: Session is over.").catch(() => {});
+            }
         }
 
         await updateMessageWithSessionOver(this.bot, this.session);
@@ -245,15 +251,16 @@ class SessionRunner {
 
         console.log(`[+] Session ${this.session.id} connected to lobby.`);
 
-        const category = await this.bot.createChannel(
+        const category = this.bot.getChannel(CATEGORY_ID);
+/*         const category = await this.bot.createChannel(
             this.session.guild,
             "Among Us - " + SHORT_REGION_NAMES[this.session.region] + " - " + this.session.lobbyCode,
             4,
             "Among Us: Create category for voice channels."
-        );
+        ); */
         this.session.channels.add(new SessionChannel(category.id, SessionChannelType.CATEGORY));
 
-        const talkingChannel = await this.bot.createChannel(this.session.guild, "Discussion", 2, {
+        const talkingChannel = await this.bot.createChannel(this.session.guild, "Discussion " + SHORT_REGION_NAMES[this.session.region] + " - " + this.session.lobbyCode, 2, {
             parentID: category.id,
         });
 
@@ -265,13 +272,13 @@ class SessionRunner {
             new SessionChannel(talkingChannel.id, SessionChannelType.TALKING, talkingInvite.code)
         );
 
-        const mutedChannel = await this.bot.createChannel(this.session.guild, "Muted", 2, {
+        const mutedChannel = await this.bot.createChannel(this.session.guild, "Muted " + SHORT_REGION_NAMES[this.session.region] + " - " + this.session.lobbyCode, 2, {
             parentID: category.id,
             permissionOverwrites: [
                 {
                     type: "role",
                     id: this.session.guild,
-                    deny: eris.Constants.Permissions.voiceSpeak,
+                    deny: eris.Constants.Permissions.voiceSpeak + eris.Constants.Permissions.readMessages,
                     allow: 0,
                 },
             ],
@@ -323,7 +330,7 @@ class SessionRunner {
         }
 
         // if we're in lobby but everyone has tasks now, we've started
-        if (this.session.state === SessionState.LOBBY && !this.playerData.some(x => !x.tasks || !x.tasks.length)) {
+        if (this.session.state === SessionState.LOBBY && !this.playerData.some(x => !x.tasks || x.tasks.length > 0)) {
             await this.setStateTo(SessionState.PLAYING);
             await movePlayersToSilenceChannel(this.bot, this.session);
         }

@@ -1,7 +1,6 @@
 import eris, { Emoji, PossiblyUncachedMessage } from "eris";
 import { createEmptyNewSession, movePlayersToSilenceChannel, movePlayersToTalkingChannel } from "./actions";
 import {
-    BOT_INVITE_LINK,
     COLOR_EMOTE_IDS,
     GROUPING_TOGGLE_EMOJI,
     LEAVE_EMOJI,
@@ -164,6 +163,7 @@ export async function onMessageCreated(bot: eris.Client, msg: eris.Message) {
         await startSession(bot, session);
     } catch (e) {
         await msg.channel.createMessage(`<@!${msg.author.id}>, sorry but something went wrong: ${e}`).catch(() => {});
+        console.error(e);
     }
 }
 
@@ -197,11 +197,7 @@ async function sendHelp(bot: eris.Client, msg: eris.Message) {
                     name: "Help! I'm having an issue!",
                     value:
                         "If Impostor is not working, join the [Discord server](https://discord.gg/fQk7CHx) and let me know!",
-                },
-                {
-                    name: "I want to add Impostor to my own server!",
-                    value: `Sure thing! Click [here](${BOT_INVITE_LINK}) to invite Impostor.`,
-                },
+                }
             ],
         },
     });
@@ -217,7 +213,7 @@ async function sendInvite(bot: eris.Client, msg: eris.Message) {
             color: 0x0a96de,
             title: "🧑‍🤝‍🧑 Impostor - Invite",
             thumbnail: { url: bot.user.avatarURL.replace("jpg", "png") },
-            description: `Want to add Impostor to your own Discord server? Sure thing! Simply click [here](${BOT_INVITE_LINK}) to add the bot.\n\nHaving issues? Join the [support Discord server](https://discord.gg/fQk7CHx) and let me know!`,
+            description: `Having issues? Join the [support Discord server](https://discord.gg/fQk7CHx) and let me know!`,
         },
     });
 }

@@ -1,13 +1,16 @@
 import eris from "eris";
 import {
+    AMONG_US_ROLE_ID,
     COLOR_EMOTES,
     DEAD_COLOR_EMOTES,
     GROUPING_DISABLED_EMOJI,
     GROUPING_ENABLED_EMOJI,
     GROUPING_TOGGLE_EMOJI,
     LEAVE_EMOJI,
+    LOADING_EMOJI,
     LobbyRegion,
     SessionState,
+    SHORT_REGION_NAMES,
 } from "./constants";
 import { orm } from "./database";
 import AmongUsSession from "./database/among-us-session";
@@ -48,7 +51,7 @@ export async function createEmptyNewSession(
     const message = await msg.channel.createMessage({
         embed: {
             color: LOADING,
-            description: `<a:loading:572067799535452171> Attempting to connect to lobby \`${code}\` on ${region}...`,
+            description: `${LOADING_EMOJI} Attempting to connect to lobby \`${code}\` on ${region}...`,
         },
     });
 
@@ -63,8 +66,8 @@ export async function createEmptyNewSession(
     session.region = region;
     session.lobbyCode = code;
     session.groupImpostors = false;
-    await orm.em.persist(session);
-    await orm.em.flush();
+    orm.em.persist(session);
+    await orm.em.flush(); // check flush
 
     return session;
 }
@@ -89,7 +92,9 @@ async function cleanUpSession(bot: eris.Client, session: AmongUsSession) {
         await session.channels.init();
 
         for (const channel of session.channels) {
-            await bot.deleteChannel(channel.channelId, "Among Us: Session is over.").catch(() => {});
+            if (channel.type != SessionChannelType.CATEGORY) {
+                await bot.deleteChannel(channel.channelId, "Among Us: Session is over.").catch(() => {});
+            }
         }
 
         await updateMessageWithSessionStale(bot, session);
@@ -103,7 +108,7 @@ async function cleanUpSession(bot: eris.Client, session: AmongUsSession) {
 /**
  * Moves all players in `idFrom` to `idTo`.
  */
-async function moveAllPlayers(bot: eris.Client, session: AmongUsSession, idFrom: string, idTo: string) {
+ export async function moveAllPlayers(bot: eris.Client, session: AmongUsSession, idFrom: string, idTo: string) {
     await Promise.all(
         getMembersInChannel(idFrom).map(x =>
             bot
@@ -184,7 +189,7 @@ export async function movePlayersToSilenceChannelUngrouped(bot: eris.Client, ses
             // ignore
         }
 
-        const adminChannel = await bot.createChannel(session.guild, "Muted (Admin)", 2, {
+        const adminChannel = await bot.createChannel(session.guild, "Muted (Admin) " + SHORT_REGION_NAMES[session.region] + " - " + session.lobbyCode, 2, {
             parentID: categoryChannel.channelId,
             permissionOverwrites: [
                 {
@@ -270,7 +275,7 @@ export async function movePlayersToSilenceChannelGrouped(bot: eris.Client, sessi
         }
 
         // We need to create a silence channel for this user.
-        const silenceChannel = await bot.createChannel(session.guild, "Muted", 2, {
+        const silenceChannel = await bot.createChannel(session.guild, "Muted " + SHORT_REGION_NAMES[session.region] + " - " + session.lobbyCode, 2, {
             parentID: categoryChannel.channelId,
             permissionOverwrites: [
                 {
@@ -278,6 +283,12 @@ export async function movePlayersToSilenceChannelGrouped(bot: eris.Client, sessi
                     id: session.guild,
                     deny: eris.Constants.Permissions.voiceSpeak | eris.Constants.Permissions.readMessages,
                     allow: 0,
+                },
+                {
+                    type: "role",
+                    id: AMONG_US_ROLE_ID,
+                    deny: 0,
+                    allow: eris.Constants.Permissions.readMessages,
                 },
             ],
         });

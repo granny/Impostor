@@ -9,7 +9,8 @@
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
         "target": "esnext",
-        "lib": ["esnext", "dom"]
+        "lib": ["esnext", "dom"],
+        "sourceMap": true
     },
     "include": [
         "src/**/*"
